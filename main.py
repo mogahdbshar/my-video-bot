@@ -34,7 +34,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "🔥 البوت يعمل بالكامل وبدون مفاتيح برمجية على Render!"
+    return "⚡ BuzzShorts Engine Supercharged and Ready!"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
@@ -68,40 +68,59 @@ def send_video(chat_id, video_bytes, caption):
         print("Error sending video:", e)
 
 def generate_text_free(prompt):
-    system_instruction = "أنت مخرج وثائقي محترف. اكتب سيناريو فيديو قصير ومفصل باللغة العربية ومشاهد بصرية مقترحة لصناعة فيديو مميز حول الفكرة التالية: "
+    system_instruction = (
+        "أنت مخرج وثائقي محترف وصانع محتوى وثائقي قصير (Shorts). "
+        "اكتب سيناريو فيديو شورت قصير جداً ومثير لا يتجاوز 45 ثانية باللغة العربية الفصحى السليمة 100% "
+        "وبدون أي كلمات غريبة أو ركيكة. قسم السيناريو إلى لقطات سريعة بالثواني، واكتب نص الراوي العربي، "
+        "مع وصف دقيق وشامل للديزاين والمونتاج البصري العمودي لكل لقطة لتبدو احترافية للغاية."
+    )
     payload = {
         "messages": [
-            {"role": "user", "content": f"{system_instruction} {prompt}"}
+            {"role": "user", "content": f"{system_instruction}\n\nفكرة الفيديو المطلوبة: {prompt}"}
         ],
-        "model": "openai" # استخدام نموذج النصوص المفتوح والمجاني لديهم
+        "model": "openai"
     }
     try:
-        response = requests.post(POLLINATIONS_TEXT_URL, json=payload, timeout=30)
+        response = requests.post(POLLINATIONS_TEXT_URL, json=payload, timeout=45)
         if response.status_code == 200:
             return True, response.text
-        return False, f"فشل السيرفر في التجاوب. كود الخطأ: {response.status_code}"
+        return False, f"⚠️ خطأ السيرفر المباشر: {response.status_code} - النص المتلقى: {response.text[:200]}"
     except Exception as e:
-        return False, f"خطأ في الاتصال بالنموذج الحر: {str(e)}"
+        return False, f"❌ فشل الاتصال بالشبكة: {str(e)}"
 
 def generate_video_clip(prompt_visual):
-    payload = {"prompt": prompt_visual}
+    full_prompt = f"{prompt_visual}, cinematic look, 8k resolution, highly detailed, moving elements, 9:16 vertical ratio for shorts, no watermark"
+    payload = {"prompt": full_prompt}
+    
+    # مصفوفة لتخزين سجل تفاصيل الأخطاء الحقيقية لعرضها للمستخدم بدقة
+    error_logs = []
+    
     for attempt in range(3):
         try:
-            response = requests.post(POLLINATIONS_VIDEO_URL, json=payload, timeout=60)
-            if response.status_code == 200:
-                return response.content
-            time.sleep(5)
+            # توسيع مهلة الاتصال لـ 180 ثانية (3 دقائق كاملة) لانتظار معالجة السيرفر المفتوح براحة
+            response = requests.post(POLLINATIONS_VIDEO_URL, json=payload, timeout=180)
+            
+            if response.status_code == 200 and response.content:
+                return True, response.content
+            
+            err_msg = f"محاولة {attempt+1}: كود الاستجابة {response.status_code} - نص الرد: {response.text[:150]}"
+            error_logs.append(err_msg)
+            
+            # زيادة فواصل الانتظار لـ 10 ثواني لعدم حرق الطلبات وتهدئة السيرفر المفتوح
+            time.sleep(10)
+            
         except Exception as e:
-            if attempt == 2:
-                print("Error generating video after all retries:", e)
-                return None
-            time.sleep(3)
+            error_logs.append(f"محاولة {attempt+1}: استثناء برميجي (Timeout/Network) -> {str(e)}")
+            time.sleep(5)
+            
+    # إذا فشلت كل المحاولات، يتم دمج وإرجاع الأخطاء الحقيقية بالتفصيل
+    return False, "\n".join(error_logs)
 
 def handle_updates():
     offset = 0
-    print("البوت يعمل الآن بالنظام الحر والمفتوح...")
+    print("البوت الأسطوري المطور والمحدث لحقن وفحص الأخطاء يعمل الآن...")
     
-    send_message(MY_CHAT_ID, "🚀 أهلاً بك يا محمد! تم تفعيل النظام المفتوح بالكامل وبدون أي مفاتيح معقدة. أرسل فكرة الفيديو الآن للتجربة!")
+    send_message(MY_CHAT_ID, "🔥 أهلاً بك يا محمد! تم تشغيل البوت بالنظام الأسطوري المطور. قمنا برفع مهلة المعالجة لـ 3 دقائق وتفعيل نظام تتبع وفحص الأخطاء المباشر. أرسل الآن فكرة الشورت للتجربة الحاسمة!")
     
     while True:
         try:
@@ -119,23 +138,22 @@ def handle_updates():
                             continue
                             
                         if text.startswith("/start"):
-                            send_message(chat_id, "أرسل لي فكرة الفيديو أو السيناريو الذي تريد العمل عليه.")
+                            send_message(chat_id, "أرسل لي فكرة فيديو شورت قصير تريد صياغته فصحى وتوليده.")
                         else:
-                            send_message(chat_id, "⏳ جاري توليد السيناريو والمشاهد عبر النظام المفتوح مجاناً...")
+                            send_message(chat_id, "⏳ جاري هندسة وتوليد سيناريو الشورت عبر محرك النصوص المطور...")
                             
-                            # التدفق الذكي لحماية الحصة
                             success, script_result = generate_text_free(text)
                             
                             if success:
                                 keyboard = {
                                     "inline_keyboard": [
-                                        [{"text": "🎬 ابدأ التوليد والمونتاج الفوري", "callback_data": f"gen_vid_{text[:20]}"}],
+                                        [{"text": "🎬 ابدأ التوليد والمونتاج الفوري للديزاين", "callback_data": f"gen_vid_{text[:20]}"}],
                                         [{"text": "✍️ تعديل السيناريو", "callback_data": "edit_script"}]
                                     ]
                                 }
-                                send_message(chat_id, f"📝 **السيناريو والمشاهد المقترحة:**\n\n{script_result}", reply_markup=keyboard)
+                                send_message(chat_id, f"📝 **سيناريو الشورت والديزاين المقترح:**\n\n{script_result}", reply_markup=keyboard)
                             else:
-                                send_message(chat_id, f"❌ **توقف النظام:**\n\n{script_result}")
+                                send_message(chat_id, f"❌ **خطأ أثناء توليد النص:**\n\n{script_result}")
                             
                     elif "callback_query" in update:
                         cb = update["callback_query"]
@@ -146,12 +164,16 @@ def handle_updates():
                         requests.post(API_URL + "answerCallbackQuery", json={"callback_query_id": cb_id})
                         
                         if data.startswith("gen_vid_"):
-                            send_message(chat_id, "🚀 جاري الآن توليد المشاهد السينمائية بدون علامة مائية... انتظر ثواني.")
-                            video_data = generate_video_clip("Cinematic documentary scene, high quality, highly detailed, moving elements")
-                            if video_data:
-                                send_video(chat_id, video_data, "🎬 هذا هو المقطع الذي تم توليده بالكامل بالذكاء الاصطناعي وبدون أي علامة مائية!")
+                            send_message(chat_id, "🚀 جاري الآن توليد ومونتاج المشهد بالمهلة الموسعة الذكية... انتظر ثواني ولا تستعجل.")
+                            
+                            # استدعاء دالة التوليد الذكية الجديدة التي ترجع حالة النجاح متبوعة بالبيانات أو الأخطاء الحقيقية
+                            success_video, result_data = generate_video_clip("Cinematic short video scene, deep ocean secret, detailed view, highly stylized vertical 9:16")
+                            
+                            if success_video:
+                                send_video(chat_id, result_data, "🎬 تم توليد وحقن مقطع الشورت بنجاح وبأعلى دقة بدون أي علامة مائية!")
                             else:
-                                send_message(chat_id, "⚠️ حد الحصص الحالي ممتلئ، سيتم إعادة المحاولة تلقائياً بعد قليل.")
+                                # هنا طباعة الأخطاء الحقيقية الصريحة القادمة من السيرفر دون أي رسائل عامة
+                                send_message(chat_id, f"❌ **تقرير فشل السيرفر الحقيقي والأخطاء بالتفصيل:**\n\n{result_data}")
                                 
                         elif data == "edit_script":
                             send_message(chat_id, "اكتب لي التعديل الذي تريده على السيناريو وسأقوم بتحديثه فوراً.")

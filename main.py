@@ -1,13 +1,14 @@
 import os
 import sys
 import subprocess
+import threading
 
 # --- 1. فحص وتثبيت المكتبات المطلوبة تلقائياً وبدون تدخل منك ---
 def install_requirements():
     # إنشاء ملف requirements.txt تلقائياً في الخلفية لمنصة الاستضافة
     try:
         with open("requirements.txt", "w", encoding="utf-8") as req_file:
-            req_file.write("requests\n")
+            req_file.write("requests\nflask\n")
     except Exception as e:
         print("Error writing requirements file:", e)
 
@@ -22,12 +23,36 @@ def install_requirements():
         except Exception as e:
             print("⚠️ حدث خطأ أثناء التثبيت التلقائي:", e)
 
+    # التحقق من وجود مكتبة flask وتثبيتها من أجل منصة Render ليصبح أخضر
+    try:
+        import flask
+    except ImportError:
+        print("⏳ جاري تثبيت مكتبة flask لتفعيل البورت في Render...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "flask"])
+            print("✅ تم تثبيت flask بنجاح!")
+        except Exception as e:
+            print("⚠️ حدث خطأ أثناء تثبيت flask:", e)
+
 # تشغيل الفحص والتثبيت فوراً قبل بدء بقية الكود
 install_requirements()
 
 # استدعاء المكتبات بعد التأكد من تثبيتها
 import time
 import requests
+from flask import Flask
+
+# --- سيرفر الويب لخدمة Render لفتح البورت بدون التضحية بالكود الأصلي ---
+flask_app = Flask(__name__)
+
+@flask_app.route('/')
+def home():
+    return "🔥 البوت يعمل بالكامل ومستقر على سيرفرات Render!"
+
+def run_web_server():
+    # جلب البورت التلقائي الذي تفرضه Render
+    port = int(os.environ.get("PORT", 8080))
+    flask_app.run(host='0.0.0.0', port=port)
 
 # --- 2. المفاتيح الخاصة بك مدمجة مباشرة وجاهزة للعمل فوراً ---
 BOT_TOKEN = "8850470812:AAFZXvwkJ9BAqXsr-BB63zbiwSwqK3-NseE"
@@ -135,7 +160,7 @@ def handle_updates():
                             if video_data:
                                 send_video(chat_id, video_data, "🎬 هذا هو المقطع الذي تم توليده بالكامل بالذكاء الاصطناعي وبدون أي علامة مائية!")
                             else:
-                                send_message(chat_id, "⚠️ حد الحصص الحالي ممتلئ أو النموذج يقوم بالتحديث، سيتم إعادة المحاولة تلقائياً بعد قليل مجاناً عند تجدد الحصة.")
+                                send_message(chat_id, "⚠️ حد الحصص الحالي ممتلئ أو النموذج يقوم بالتحديث, سيتم إعادة المحاولة تلقائياً بعد قليل مجاناً عند تجدد الحصة.")
                                 
                         elif data == "edit_script":
                             send_message(chat_id, "اكتب لي التعديل الذي تريده على السيناريو وسأقوم بتحديثه فوراً مع الذكاء الاصطناعي.")
@@ -145,4 +170,8 @@ def handle_updates():
             time.sleep(5)
 
 if __name__ == "__main__":
+    # تشغيل سيرفر الويب في الخلفية بشكل مستقل لفتح البورت ويفهمه Render
+    threading.Thread(target=run_web_server, daemon=True).start()
+    
+    # تشغيل البوت الأساسي بكامل تفاصيله الأصلية دون أي نقصان
     handle_updates()

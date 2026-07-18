@@ -3,25 +3,21 @@ import sys
 import subprocess
 import threading
 
-# --- 1. فحص وتثبيت المكتبات المطلوبة تلقائياً وبشكل منظم ---
+# --- 1. فحص وتثبيت المكتبات المطلوبة تلقائياً ---
 def install_requirements():
     try:
         with open("requirements.txt", "w", encoding="utf-8") as req_file:
-            req_file.write("requests\nflask\ngoogle-genai\n")
+            req_file.write("requests\nflask\n")
     except Exception as e:
         print("Error writing requirements file:", e)
 
-    for lib in ["requests", "flask", "google"]:
+    for lib in ["requests", "flask"]:
         try:
-            if lib == "google":
-                from google import genai
-            else:
-                __import__(lib)
+            __import__(lib)
         except ImportError:
             print(f"⏳ جاري تثبيت {lib} تلقائياً للتشغيل...")
             try:
-                lib_name = "google-genai" if lib == "google" else lib
-                subprocess.check_call([sys.executable, "-m", "pip", "install", lib_name])
+                subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
                 print(f"✅ تم تثبيت {lib} بنجاح!")
             except Exception as e:
                 print(f"⚠️ حدث خطأ أثناء تثبيت {lib}: {e}")
@@ -32,29 +28,25 @@ install_requirements()
 import time
 import requests
 from flask import Flask
-from google import genai
 
 # --- سيرفر الويب لخدمة Render لفتح البورت ---
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "🔥 البوت يعمل بالكامل وبطريقة مستقرة ومنظمة على Render!"
+    return "🔥 البوت يعمل بالكامل وبدون مفاتيح برمجية على Render!"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host='0.0.0.0', port=port)
 
-# --- 2. الإعدادات والمفاتيح الرسمية الخاصة بك ---
+# --- 2. الإعدادات وعناوين الخدمة المفتوحة ---
 BOT_TOKEN = "8850470812:AAFZXvwkJ9BAqXsr-BB63zbiwSwqK3-NseE"
 MY_CHAT_ID = "455805554"
-GEMINI_TOKEN = "AQ.Ab8RN6KJ6yI28_E86MNRO228Pcma2OUOT6wtb6o6tv0y0RQJWQ"
 
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
+POLLINATIONS_TEXT_URL = "https://text.pollinations.ai/"
 POLLINATIONS_VIDEO_URL = "https://text.pollinations.ai/video"
-
-# تهيئة عميل جوجل المطورين الرسمي بالمفتاح الخاص بك
-client = genai.Client(api_key=GEMINI_TOKEN)
 
 def send_message(chat_id, text, reply_markup=None):
     url = API_URL + "sendMessage"
@@ -75,19 +67,21 @@ def send_video(chat_id, video_bytes, caption):
     except Exception as e:
         print("Error sending video:", e)
 
-def generate_text_smart(prompt):
+def generate_text_free(prompt):
     system_instruction = "أنت مخرج وثائقي محترف. اكتب سيناريو فيديو قصير ومفصل باللغة العربية ومشاهد بصرية مقترحة لصناعة فيديو مميز حول الفكرة التالية: "
+    payload = {
+        "messages": [
+            {"role": "user", "content": f"{system_instruction} {prompt}"}
+        ],
+        "model": "openai" # استخدام نموذج النصوص المفتوح والمجاني لديهم
+    }
     try:
-        # استخدام الدالة المستقرة والمجانية تماماً لتجنب خطأ الـ OAuth 401
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=f"{system_instruction} {prompt}"
-        )
-        if response.text:
+        response = requests.post(POLLINATIONS_TEXT_URL, json=payload, timeout=30)
+        if response.status_code == 200:
             return True, response.text
-        return False, "تلقى البوت رداً فارغاً من السيرفر."
+        return False, f"فشل السيرفر في التجاوب. كود الخطأ: {response.status_code}"
     except Exception as e:
-        return False, f"خطأ في الاتصال أو صلاحية المفتاح: {str(e)}"
+        return False, f"خطأ في الاتصال بالنموذج الحر: {str(e)}"
 
 def generate_video_clip(prompt_visual):
     payload = {"prompt": prompt_visual}
@@ -105,9 +99,9 @@ def generate_video_clip(prompt_visual):
 
 def handle_updates():
     offset = 0
-    print("البوت يعمل الآن ومنظم تماماً وبأعلى أداء...")
+    print("البوت يعمل الآن بالنظام الحر والمفتوح...")
     
-    send_message(MY_CHAT_ID, "🔥 أهلاً بك يا محمد! تم تحديث البوت بالنظام المستقر الموفر للحصص. أرسل فكرة فيديو الآن للتجربة الحاسمة.")
+    send_message(MY_CHAT_ID, "🚀 أهلاً بك يا محمد! تم تفعيل النظام المفتوح بالكامل وبدون أي مفاتيح معقدة. أرسل فكرة الفيديو الآن للتجربة!")
     
     while True:
         try:
@@ -127,10 +121,10 @@ def handle_updates():
                         if text.startswith("/start"):
                             send_message(chat_id, "أرسل لي فكرة الفيديو أو السيناريو الذي تريد العمل عليه.")
                         else:
-                            send_message(chat_id, "⏳ جاري توليد السيناريو والمشاهد بالذكاء الاصطناعي...")
+                            send_message(chat_id, "⏳ جاري توليد السيناريو والمشاهد عبر النظام المفتوح مجاناً...")
                             
-                            # التدفق المنظم: فحص النجاح أولاً لحماية الحصة من الهدر
-                            success, script_result = generate_text_smart(text)
+                            # التدفق الذكي لحماية الحصة
+                            success, script_result = generate_text_free(text)
                             
                             if success:
                                 keyboard = {
@@ -141,8 +135,7 @@ def handle_updates():
                                 }
                                 send_message(chat_id, f"📝 **السيناريو والمشاهد المقترحة:**\n\n{script_result}", reply_markup=keyboard)
                             else:
-                                # التوقف التام عند الخطأ لعدم حرق الحصص عشوائياً
-                                send_message(chat_id, f"❌ **توقف النظام لحماية حصتك:**\n\n{script_result}")
+                                send_message(chat_id, f"❌ **توقف النظام:**\n\n{script_result}")
                             
                     elif "callback_query" in update:
                         cb = update["callback_query"]
@@ -153,12 +146,12 @@ def handle_updates():
                         requests.post(API_URL + "answerCallbackQuery", json={"callback_query_id": cb_id})
                         
                         if data.startswith("gen_vid_"):
-                            send_message(chat_id, "🚀 جاري الآن مخاطبة نموذج التوليد المفتوح لتوليد المشاهد السينمائية بدون علامة مائية...")
+                            send_message(chat_id, "🚀 جاري الآن توليد المشاهد السينمائية بدون علامة مائية... انتظر ثواني.")
                             video_data = generate_video_clip("Cinematic documentary scene, high quality, highly detailed, moving elements")
                             if video_data:
                                 send_video(chat_id, video_data, "🎬 هذا هو المقطع الذي تم توليده بالكامل بالذكاء الاصطناعي وبدون أي علامة مائية!")
                             else:
-                                send_message(chat_id, "⚠️ حد الحصص الحالي ممتلئ أو النموذج يقوم بالتحديث، سيتم إعادة المحاولة تلقائياً بعد قليل مجاناً.")
+                                send_message(chat_id, "⚠️ حد الحصص الحالي ممتلئ، سيتم إعادة المحاولة تلقائياً بعد قليل.")
                                 
                         elif data == "edit_script":
                             send_message(chat_id, "اكتب لي التعديل الذي تريده على السيناريو وسأقوم بتحديثه فوراً.")

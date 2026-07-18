@@ -5,14 +5,12 @@ import threading
 
 # --- 1. فحص وتثبيت المكتبات المطلوبة تلقائياً وبدون تدخل منك ---
 def install_requirements():
-    # إنشاء ملف requirements.txt تلقائياً في الخلفية لمنصة الاستضافة
     try:
         with open("requirements.txt", "w", encoding="utf-8") as req_file:
             req_file.write("requests\nflask\n")
     except Exception as e:
         print("Error writing requirements file:", e)
 
-    # التحقق من وجود مكتبة requests وتثبيتها إذا لم تكن موجودة
     try:
         import requests
     except ImportError:
@@ -23,7 +21,6 @@ def install_requirements():
         except Exception as e:
             print("⚠️ حدث خطأ أثناء التثبيت التلقائي:", e)
 
-    # التحقق من وجود مكتبة flask وتثبيتها من أجل منصة Render ليصبح أخضر
     try:
         import flask
     except ImportError:
@@ -42,7 +39,7 @@ import time
 import requests
 from flask import Flask
 
-# --- سيرفر الويب لخدمة Render لفتح البورت بدون التضحية بالكود الأصلي ---
+# --- سيرفر الويب لخدمة Render لفتح البورت ---
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
@@ -50,7 +47,6 @@ def home():
     return "🔥 البوت يعمل بالكامل ومستقر على سيرفرات Render!"
 
 def run_web_server():
-    # جلب البورت التلقائي الذي تفرضه Render
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host='0.0.0.0', port=port)
 
@@ -61,7 +57,7 @@ HF_TOKEN = "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"
 
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 
-# عناوين نماذج Hugging Face المفتوحة والمجانية بالكامل
+# عناوين نماذج Hugging Face
 HF_LLM_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
 HF_VIDEO_URL = "https://api-inference.huggingface.co/models/THUDM/CogVideoX-2b"
 
@@ -87,32 +83,46 @@ def send_video(chat_id, video_bytes, caption):
 def generate_text(prompt):
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     payload = {"inputs": f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nأنت مخرج وثائقي محترف. اكتب سيناريو فيديو قصير ومفصل باللغة العربية ومشاهد بصرية مقترحة لصناعة فيديو مميز حول الفكرة التالية: {prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"}
-    try:
-        response = requests.post(HF_LLM_URL, headers=headers, json=payload, timeout=30)
-        res_json = response.json()
-        if isinstance(res_json, list) and len(res_json) > 0:
-            return res_json[0].get("generated_text", "لم أتمكن من توليد السيناريو.")
-        return str(res_json)
-    except Exception as e:
-        return f"خطأ في توليد السيناريو: {str(e)}"
+    
+    # محاولة الاتصال الذكي وتخطي خطأ الـ DNS المؤقت
+    for attempt in range(4):
+        try:
+            response = requests.post(HF_LLM_URL, headers=headers, json=payload, timeout=30)
+            res_json = response.json()
+            if isinstance(res_json, list) and len(res_json) > 0:
+                return res_json[0].get("generated_text", "لم أتمكن من توليد السيناريو.")
+            return str(res_json)
+        except Exception as e:
+            if attempt == 3:  # إذا فشلت كل المحاولات الأربعة
+                return f"خطأ في توليد السيناريو بعد عدة محاولات: {str(e)}"
+            print(f"إعادة محاولة الاتصال بالنموذج بسبب هزة الشبكة... محاولة رقم {attempt+1}")
+            time.sleep(2)
 
 def generate_video_clip(prompt_visual):
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     payload = {"inputs": prompt_visual}
-    try:
-        response = requests.post(HF_VIDEO_URL, headers=headers, json=payload, timeout=60)
-        if response.status_code == 200:
-            return response.content
-        return None
-    except Exception as e:
-        print("Error generating video:", e)
-        return None
+    
+    # محاولة الاتصال الذكي لتوليد الفيديو وتخطي خطأ الـ DNS
+    for attempt in range(4):
+        try:
+            response = requests.post(HF_VIDEO_URL, headers=headers, json=payload, timeout=60)
+            if response.status_code == 200:
+                return response.content
+            # إذا أرجع السيرفر كود 503 أو 429 تعني أن النموذج يحمل في الـ Cache
+            if response.status_code in [503, 429]:
+                time.sleep(5)
+                continue
+            return None
+        except Exception as e:
+            if attempt == 3:
+                print("Error generating video after all retries:", e)
+                return None
+            time.sleep(3)
 
 def handle_updates():
     offset = 0
     print("البوت يعمل الآن ومستعد لاستقبال رسائلك...")
     
-    # إرسال رسالة ترحيبية لحسابك مباشرة عند تشغيل السكربت لتأكيد نجاح الاتصال
     send_message(MY_CHAT_ID, "🔥 أهلاً بك يا محمد! البوت مفعّل بالكامل ومستعد للعمل. أرسل لي أي فكرة فيديو لنبدأ فوراً.")
     
     while True:
@@ -126,7 +136,6 @@ def handle_updates():
                         chat_id = str(update["message"]["chat"]["id"])
                         text = update["message"]["text"]
                         
-                        # حماية البوت: يتفاعل معك أنت فقط
                         if chat_id != MY_CHAT_ID:
                             send_message(chat_id, "عذراً، هذا البوت خاص بمحمد الدستور فقط.")
                             continue
@@ -137,7 +146,6 @@ def handle_updates():
                             send_message(chat_id, "⏳ جاري مناقشة الفكرة وتوليد السيناريو والمشاهد من الذكاء الاصطناعي...")
                             script_result = generate_text(text)
                             
-                            # أزرار تفاعلية داخل تليجرام
                             keyboard = {
                                 "inline_keyboard": [
                                     [{"text": "🎬 ابدأ التوليد والمونتاج الفوري", "callback_data": f"gen_vid_{text[:20]}"}],
@@ -160,7 +168,7 @@ def handle_updates():
                             if video_data:
                                 send_video(chat_id, video_data, "🎬 هذا هو المقطع الذي تم توليده بالكامل بالذكاء الاصطناعي وبدون أي علامة مائية!")
                             else:
-                                send_message(chat_id, "⚠️ حد الحصص الحالي ممتلئ أو النموذج يقوم بالتحديث, سيتم إعادة المحاولة تلقائياً بعد قليل مجاناً عند تجدد الحصة.")
+                                send_message(chat_id, "⚠️ حد الحصص الحالي ممتلئ أو النموذج يقوم بالتحديث، سيتم إعادة المحاولة تلقائياً بعد قليل مجاناً عند تجدد الحصة.")
                                 
                         elif data == "edit_script":
                             send_message(chat_id, "اكتب لي التعديل الذي تريده على السيناريو وسأقوم بتحديثه فوراً مع الذكاء الاصطناعي.")
@@ -170,8 +178,5 @@ def handle_updates():
             time.sleep(5)
 
 if __name__ == "__main__":
-    # تشغيل سيرفر الويب في الخلفية بشكل مستقل لفتح البورت ويفهمه Render
     threading.Thread(target=run_web_server, daemon=True).start()
-    
-    # تشغيل البوت الأساسي بكامل تفاصيله الأصلية دون أي نقصان
     handle_updates()

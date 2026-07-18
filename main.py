@@ -53,13 +53,14 @@ def run_web_server():
 # --- 2. المفاتيح الخاصة بك مدمجة مباشرة وجاهزة للعمل فوراً ---
 BOT_TOKEN = "8850470812:AAFZXvwkJ9BAqXsr-BB63zbiwSwqK3-NseE"
 MY_CHAT_ID = "455805554"
-HF_TOKEN = "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"
+# تم دمج مفتاح Gemini الخاص بك هنا بنجاح
+GEMINI_TOKEN = "AQ.Ab8RN6KJ6yI28_E86MNRO228Pcma2OUOT6wtb6o6tv0y0RQJWQ"
 
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 
-# عناوين نماذج Hugging Face
-HF_LLM_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
-HF_VIDEO_URL = "https://api-inference.huggingface.co/models/THUDM/CogVideoX-2b"
+# عناوين النماذج البديلة المستقرة والمفتوحة بالكامل على Render
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_TOKEN}"
+POLLINATIONS_VIDEO_URL = "https://text.pollinations.ai/video"
 
 def send_message(chat_id, text, reply_markup=None):
     url = API_URL + "sendMessage"
@@ -81,38 +82,36 @@ def send_video(chat_id, video_bytes, caption):
         print("Error sending video:", e)
 
 def generate_text(prompt):
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    payload = {"inputs": f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nأنت مخرج وثائقي محترف. اكتب سيناريو فيديو قصير ومفصل باللغة العربية ومشاهد بصرية مقترحة لصناعة فيديو مميز حول الفكرة التالية: {prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"}
+    headers = {"Content-Type": "application/json"}
+    system_instruction = "أنت مخرج وثائقي محترف. اكتب سيناريو فيديو قصير ومفصل باللغة العربية ومشاهد بصرية مقترحة لصناعة فيديو مميز حول الفكرة التالية: "
+    payload = {
+        "contents": [{
+            "parts": [{"text": f"{system_instruction} {prompt}"}]
+        }]
+    }
     
-    # محاولة الاتصال الذكي وتخطي خطأ الـ DNS المؤقت
     for attempt in range(4):
         try:
-            response = requests.post(HF_LLM_URL, headers=headers, json=payload, timeout=30)
+            response = requests.post(GEMINI_URL, headers=headers, json=payload, timeout=30)
             res_json = response.json()
-            if isinstance(res_json, list) and len(res_json) > 0:
-                return res_json[0].get("generated_text", "لم أتمكن من توليد السيناريو.")
-            return str(res_json)
+            if "candidates" in res_json and len(res_json["candidates"]) > 0:
+                return res_json["candidates"][0]["content"]["parts"][0]["text"]
+            return f"لم أتمكن من توليد السيناريو. رد السيرفر: {str(res_json)}"
         except Exception as e:
-            if attempt == 3:  # إذا فشلت كل المحاولات الأربعة
+            if attempt == 3:
                 return f"خطأ في توليد السيناريو بعد عدة محاولات: {str(e)}"
-            print(f"إعادة محاولة الاتصال بالنموذج بسبب هزة الشبكة... محاولة رقم {attempt+1}")
+            print(f"إعادة محاولة الاتصال بـ Gemini... محاولة رقم {attempt+1}")
             time.sleep(2)
 
 def generate_video_clip(prompt_visual):
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    payload = {"inputs": prompt_visual}
-    
-    # محاولة الاتصال الذكي لتوليد الفيديو وتخطي خطأ الـ DNS
+    # إرسال الطلب لنموذج توليد الفيديو المفتوح والمستقر بالكامل على Render
+    payload = {"prompt": prompt_visual}
     for attempt in range(4):
         try:
-            response = requests.post(HF_VIDEO_URL, headers=headers, json=payload, timeout=60)
+            response = requests.post(POLLINATIONS_VIDEO_URL, json=payload, timeout=60)
             if response.status_code == 200:
                 return response.content
-            # إذا أرجع السيرفر كود 503 أو 429 تعني أن النموذج يحمل في الـ Cache
-            if response.status_code in [503, 429]:
-                time.sleep(5)
-                continue
-            return None
+            time.sleep(5)
         except Exception as e:
             if attempt == 3:
                 print("Error generating video after all retries:", e)
@@ -163,7 +162,7 @@ def handle_updates():
                         requests.post(API_URL + "answerCallbackQuery", json={"callback_query_id": cb_id})
                         
                         if data.startswith("gen_vid_"):
-                            send_message(chat_id, "🚀 جاري الآن مخاطبة نموذج CogVideoX لتوليد المشاهد السينمائية بدون علامة مائية... انتظر ثواني.")
+                            send_message(chat_id, "🚀 جاري الآن مخاطبة نموذج التوليد المفتوح لتوليد المشاهد السينمائية بدون علامة مائية... انتظر ثواني.")
                             video_data = generate_video_clip("Cinematic documentary scene, high quality, highly detailed, moving elements")
                             if video_data:
                                 send_video(chat_id, video_data, "🎬 هذا هو المقطع الذي تم توليده بالكامل بالذكاء الاصطناعي وبدون أي علامة مائية!")

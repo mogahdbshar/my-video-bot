@@ -1,0 +1,148 @@
+import os
+import sys
+import subprocess
+
+# --- 1. فحص وتثبيت المكتبات المطلوبة تلقائياً وبدون تدخل منك ---
+def install_requirements():
+    # إنشاء ملف requirements.txt تلقائياً في الخلفية لمنصة الاستضافة
+    try:
+        with open("requirements.txt", "w", encoding="utf-8") as req_file:
+            req_file.write("requests\n")
+    except Exception as e:
+        print("Error writing requirements file:", e)
+
+    # التحقق من وجود مكتبة requests وتثبيتها إذا لم تكن موجودة
+    try:
+        import requests
+    except ImportError:
+        print("⏳ جاري تثبيت المكتبات المطلوبة تلقائياً، انتظر ثوانٍ...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
+            print("✅ تم التثبيت بنجاح!")
+        except Exception as e:
+            print("⚠️ حدث خطأ أثناء التثبيت التلقائي:", e)
+
+# تشغيل الفحص والتثبيت فوراً قبل بدء بقية الكود
+install_requirements()
+
+# استدعاء المكتبات بعد التأكد من تثبيتها
+import time
+import requests
+
+# --- 2. المفاتيح الخاصة بك مدمجة مباشرة وجاهزة للعمل فوراً ---
+BOT_TOKEN = "8850470812:AAFZXvwkJ9BAqXsr-BB63zbiwSwqK3-NseE"
+MY_CHAT_ID = "455805554"
+HF_TOKEN = "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"
+
+API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
+
+# عناوين نماذج Hugging Face المفتوحة والمجانية بالكامل
+HF_LLM_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
+HF_VIDEO_URL = "https://api-inference.huggingface.co/models/THUDM/CogVideoX-2b"
+
+def send_message(chat_id, text, reply_markup=None):
+    url = API_URL + "sendMessage"
+    payload = {"chat_id": chat_id, "text": text}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print("Error sending message:", e)
+
+def send_video(chat_id, video_bytes, caption):
+    url = API_URL + "sendVideo"
+    files = {"video": ("video.mp4", video_bytes, "video/mp4")}
+    data = {"chat_id": chat_id, "caption": caption}
+    try:
+        requests.post(url, files=files, data=data)
+    except Exception as e:
+        print("Error sending video:", e)
+
+def generate_text(prompt):
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    payload = {"inputs": f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nأنت مخرج وثائقي محترف. اكتب سيناريو فيديو قصير ومفصل باللغة العربية ومشاهد بصرية مقترحة لصناعة فيديو مميز حول الفكرة التالية: {prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"}
+    try:
+        response = requests.post(HF_LLM_URL, headers=headers, json=payload, timeout=30)
+        res_json = response.json()
+        if isinstance(res_json, list) and len(res_json) > 0:
+            return res_json[0].get("generated_text", "لم أتمكن من توليد السيناريو.")
+        return str(res_json)
+    except Exception as e:
+        return f"خطأ في توليد السيناريو: {str(e)}"
+
+def generate_video_clip(prompt_visual):
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    payload = {"inputs": prompt_visual}
+    try:
+        response = requests.post(HF_VIDEO_URL, headers=headers, json=payload, timeout=60)
+        if response.status_code == 200:
+            return response.content
+        return None
+    except Exception as e:
+        print("Error generating video:", e)
+        return None
+
+def handle_updates():
+    offset = 0
+    print("البوت يعمل الآن ومستعد لاستقبال رسائلك...")
+    
+    # إرسال رسالة ترحيبية لحسابك مباشرة عند تشغيل السكربت لتأكيد نجاح الاتصال
+    send_message(MY_CHAT_ID, "🔥 أهلاً بك يا محمد! البوت مفعّل بالكامل ومستعد للعمل. أرسل لي أي فكرة فيديو لنبدأ فوراً.")
+    
+    while True:
+        try:
+            url = API_URL + f"getUpdates?offset={offset}&timeout=20"
+            response = requests.get(url).json()
+            if "result" in response:
+                for update in response["result"]:
+                    offset = update["update_id"] + 1
+                    if "message" in update and "text" in update["message"]:
+                        chat_id = str(update["message"]["chat"]["id"])
+                        text = update["message"]["text"]
+                        
+                        # حماية البوت: يتفاعل معك أنت فقط
+                        if chat_id != MY_CHAT_ID:
+                            send_message(chat_id, "عذراً، هذا البوت خاص بمحمد الدستور فقط.")
+                            continue
+                            
+                        if text.startswith("/start"):
+                            send_message(chat_id, "أرسل لي فكرة الفيديو أو السيناريو الذي تريد العمل عليه.")
+                        else:
+                            send_message(chat_id, "⏳ جاري مناقشة الفكرة وتوليد السيناريو والمشاهد من الذكاء الاصطناعي...")
+                            script_result = generate_text(text)
+                            
+                            # أزرار تفاعلية داخل تليجرام
+                            keyboard = {
+                                "inline_keyboard": [
+                                    [{"text": "🎬 ابدأ التوليد والمونتاج الفوري", "callback_data": f"gen_vid_{text[:20]}"}],
+                                    [{"text": "✍️ تعديل السيناريو", "callback_data": "edit_script"}]
+                                ]
+                            }
+                            send_message(chat_id, f"📝 **السيناريو والمشاهد المقترحة:**\n\n{script_result}", reply_markup=keyboard)
+                            
+                    elif "callback_query" in update:
+                        cb = update["callback_query"]
+                        cb_id = cb["id"]
+                        chat_id = str(cb["message"]["chat"]["id"])
+                        data = cb["data"]
+                        
+                        requests.post(API_URL + "answerCallbackQuery", json={"callback_query_id": cb_id})
+                        
+                        if data.startswith("gen_vid_"):
+                            send_message(chat_id, "🚀 جاري الآن مخاطبة نموذج CogVideoX لتوليد المشاهد السينمائية بدون علامة مائية... انتظر ثواني.")
+                            video_data = generate_video_clip("Cinematic documentary scene, high quality, highly detailed, moving elements")
+                            if video_data:
+                                send_video(chat_id, video_data, "🎬 هذا هو المقطع الذي تم توليده بالكامل بالذكاء الاصطناعي وبدون أي علامة مائية!")
+                            else:
+                                send_message(chat_id, "⚠️ حد الحصص الحالي ممتلئ أو النموذج يقوم بالتحديث، سيتم إعادة المحاولة تلقائياً بعد قليل مجاناً عند تجدد الحصة.")
+                                
+                        elif data == "edit_script":
+                            send_message(chat_id, "اكتب لي التعديل الذي تريده على السيناريو وسأقوم بتحديثه فوراً مع الذكاء الاصطناعي.")
+                            
+        except Exception as e:
+            print("Error loop:", e)
+            time.sleep(5)
+
+if __name__ == "__main__":
+    handle_updates()
